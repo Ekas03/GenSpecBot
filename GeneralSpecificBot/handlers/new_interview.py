@@ -10,17 +10,24 @@ from transformers import pipeline
 
 morph = pymorphy2.MorphAnalyzer()
 
+# первое лицо во множественном числе (мы, наш)
 FIRST_PERSON_PLURAL_LEMMAS = {"мы", "наш"}
+
+# первое лицо в единственном числе (я, мой)
 FIRST_PERSON_SINGULAR_LEMMAS = {"я", "мой"}
 
+# суффиксы, характерные для отглагольных существительных
 DEVERBAL_SUFFIXES = ("ние", "ция", "тельство", "ание", "ение", "ка")
 
+# нормальная форма слова
 def get_lemma(word: str) -> str:
     return morph.parse(word)[0].normal_form
 
+# похоже ли на отглагольное
 def looks_like_deverbal(noun: str) -> bool:
     return noun.endswith(DEVERBAL_SUFFIXES)
 
+# подсчет ОБЩИХ признаков
 def contains_label0_features(sentence: str) -> int:
     words = sentence.lower().split()
     counter = 0
@@ -29,19 +36,29 @@ def contains_label0_features(sentence: str) -> int:
         lemma = parsed.normal_form
         tag = parsed.tag
 
+        # местоимение 1-го лица множественного числа
         if lemma in FIRST_PERSON_PLURAL_LEMMAS:
             counter += 1
+
+        # глагол 1-го лица множественного числа
         if ("VERB" in tag or "INFN" in tag) and "1per" in tag and "plur" in tag:
             counter += 1
+
+        # глагол совершенного вида
         if ("VERB" in tag or "INFN" in tag) and "perf" in tag:
             counter += 1
+
+        # пассивная форма
         if "pssv" in tag:
             counter += 1
+
+        # причастие или деепричастие
         if "PRTF" in tag or "GRND" in tag:
             counter += 1
 
     return counter
 
+# подсчет ЧАСТНЫХ признаков
 def contains_label1_features(sentence: str) -> int:
     words = sentence.lower().split()
     parsed_words = [(w, morph.parse(w)[0]) for w in words]
@@ -51,16 +68,23 @@ def contains_label1_features(sentence: str) -> int:
         lemma = p.normal_form
         tag = p.tag
 
+        # местоимение 1-го лица единственного числа
         if lemma in FIRST_PERSON_SINGULAR_LEMMAS:
             counter += 1
+
+        # глагол 1-го лица единственного числа
         if ("VERB" in tag or "INFN" in tag) and "1per" in tag and "sing" in tag:
             counter += 1
 
+    # отглагольное существительное
     if any("NOUN" in p.tag and looks_like_deverbal(w) for w, p in parsed_words):
         counter += 1
+
+    # глаголы несовершенного вида
     if any(("VERB" in p.tag or "INFN" in p.tag) and "impf" in p.tag for w, p in parsed_words):
         counter += 1
 
+    # три и более глагола подряд
     tokens = re.split(r"[,\s]+", sentence.lower())
     run = 0
     for t in tokens:
